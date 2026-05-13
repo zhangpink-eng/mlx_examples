@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNIST 训练对比平台</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0b1120;
+  --surface: #1a2332;
+  --surface2: #243044;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --accent: #3b82f6;
+  --accent2: #06b6d4;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+header {
+  background: linear-gradient(135deg, #1a2332 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 32px;
+  text-align: center;
+}
+header h1 { font-size: 26px; font-weight: 700; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+header p { color: var(--text2); margin-top: 4px; font-size: 13px; }
+
+.container { max-width: 1500px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+.card h2 { font-size: 14px; font-weight: 600; color: var(--accent2); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: .5px; }
+.card h2 .badge {
+  font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 99px;
+  background: var(--surface2); color: var(--text3); margin-left: auto; text-transform: none; letter-spacing: 0;
+}
+.full-width { grid-column: 2; }
+
+/* ── Params panel ── */
+.param-group { margin-bottom: 14px; }
+.param-group:last-child { margin-bottom: 0; }
+.param-group label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--text2); margin-bottom: 4px;
+}
+.param-group label .val {
+  font-weight: 600; color: var(--accent); font-family: 'SF Mono', monospace; font-size: 13px;
+}
+.param-group input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px;
+  background: var(--surface2); outline: none; cursor: pointer;
+}
+.param-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); cursor: pointer; border: 2px solid var(--surface);
+}
+.param-group select {
+  width: 100%; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); font-size: 13px; outline: none; cursor: pointer;
+}
+.param-hint { font-size: 11px; color: var(--text3); margin-top: 2px; line-height: 1.5; }
+.param-details summary { list-style: none; }
+.param-details summary::-webkit-details-marker { display: none; }
+
+/* ── Buttons ── */
+.btn-row { display: flex; gap: 8px; margin-top: 8px; }
+.btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .2s;
+}
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+.btn.training .spinner { display: inline-block; }
+.btn.training .btn-txt { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--surface2); color: var(--text); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+
+/* ── Run list ── */
+.run-list { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.run-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 6px; background: var(--surface2);
+  font-size: 12px;
+}
+.run-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.run-item .label { color: var(--text); flex: 1; }
+.run-item .acc { color: var(--green); font-weight: 600; font-family: 'SF Mono', monospace; font-size: 11px; }
+.run-item .rm { cursor: pointer; color: var(--text3); font-size: 14px; line-height: 1; padding: 0 4px; }
+.run-item .rm:hover { color: var(--red); }
+
+/* ── Chart ── */
+.chart-wrapper { position: relative; height: 280px; }
+.chart-legend-custom { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; font-size: 12px; }
+.chart-legend-custom .leg-item { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.chart-legend-custom .leg-swatch { width: 12px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.chart-legend-custom .leg-swatch.dashed { height: 0; border-top: 3px dashed; border-radius: 0; }
+.chart-legend-custom .leg-item.dimmed { opacity: .35; }
+
+/* ── Predictions ── */
+.samples-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+.samples-grid .cell { position: relative; aspect-ratio: 1; background: #000; border-radius: 3px; overflow: hidden; }
+.samples-grid .cell canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.samples-grid .cell .lbl {
+  position: absolute; bottom: 1px; right: 2px; font-size: 8px; font-weight: 700;
+  background: rgba(0,0,0,.65); color: #fff; padding: 0 3px; border-radius: 2px;
+}
+
+.pred-row { margin-bottom: 12px; }
+.pred-row:last-child { margin-bottom: 0; }
+.pred-row .pred-title {
+  font-size: 12px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+}
+.pred-row .pred-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.pred-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.pred-grid .cell { position: relative; aspect-ratio: 1; background: #000; border-radius: 4px; overflow: hidden; border: 2px solid transparent; }
+.pred-grid .cell canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.pred-grid .cell .lbl { position: absolute; bottom: 1px; right: 2px; font-size: 9px; font-weight: 700; padding: 0 3px; border-radius: 2px; }
+.pred-grid .cell.correct { border-color: var(--green); }
+.pred-grid .cell.wrong { border-color: var(--red); }
+.pred-grid .cell.correct .lbl { background: rgba(34,197,94,.85); color: #fff; }
+.pred-grid .cell.wrong .lbl { background: rgba(239,68,68,.85); color: #fff; }
+
+/* ── Log ── */
+.log-box {
+  background: #060a12; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; height: 130px; overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.6;
+}
+.log-box::-webkit-scrollbar { width: 5px; }
+.log-box::-webkit-scrollbar-track { background: transparent; }
+.log-box::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+.log-entry { color: var(--text3); }
+.log-entry.info { color: var(--accent); }
+.log-entry.epoch { color: var(--green); }
+.log-entry.done { color: var(--accent2); font-weight: 600; }
+.log-entry.run-start { color: var(--amber); font-weight: 600; }
+
+/* ── Status bar ── */
+.status-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; background: var(--surface2); border-radius: 8px;
+  font-size: 12px; color: var(--text2); margin-bottom: 8px;
+}
+.status-bar .bar-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+.status-bar .bar-dot.active { background: var(--green); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+@media (max-width: 1000px) {
+  .container { grid-template-columns: 1fr; }
+  .full-width { grid-column: 1; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>MNIST 训练对比平台</h1>
+  <p>调整超参数，运行对比实验，观察不同配置对模型性能的影响</p>
+</header>
+
+<div class="container">
+  <!-- LEFT: Params -->
+  <div class="card">
+    <h2>训练参数</h2>
+    <details class="param-details" open>
+      <summary style="font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;margin-bottom:10px;user-select:none;">模型结构</summary>
+      <div class="param-group">
+        <label>隐藏层神经元 <span class="val" id="vHidden">32</span></label>
+        <input type="range" id="pHidden" min="4" max="512" value="32" step="4">
+        <div class="param-hint">每层隐藏层的神经元数量。越多 → 模型可以学习更复杂的特征组合，但参数量暴涨、训练变慢、更容易过拟合（记住训练集而非通用规律）。MNIST 这种简单任务 32~128 足矣。</div>
+      </div>
+      <div class="param-group">
+        <label>隐藏层层数 <span class="val" id="vLayers">2</span></label>
+        <input type="range" id="pLayers" min="1" max="6" value="2" step="1">
+        <div class="param-hint">隐藏层数量（总 Linear 层数 = 隐藏层 + 1 输出层）。层数越多 → 模型能表达更抽象的特征层次（如 边缘→形状→数字局部→整体），但梯度在反向传播时容易消失。2~3 层对 MNIST 够了。</div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 10px;">训练过程</div>
+      <div class="param-group">
+        <label>训练轮数 (epochs) <span class="val" id="vEpochs">10</span></label>
+        <input type="range" id="pEpochs" min="1" max="30" value="10" step="1">
+        <div class="param-hint">整个训练集被完整遍历的次数。越多 → 模型有更多机会学习数据中的规律，但超过某个点后 Loss 不再下降（收敛），继续训练只会浪费时间甚至过拟合。通常观察 Loss 曲线不再下降时就可以停。</div>
+      </div>
+      <div class="param-group">
+        <label>Batch 大小 <span class="val" id="vBatch">256</span></label>
+        <input type="range" id="pBatch" min="32" max="1024" value="256" step="32">
+        <div class="param-hint">每次参数更新时喂入的样本数。小 batch（32~64）→ 梯度噪声大但泛化好，等效引入正则化效果。大 batch（512+）→ 梯度方向更准、训练更快，但容易收敛到尖锐最小值（泛化差）。256 是常见折中。</div>
+      </div>
+      <div class="param-group">
+        <label>学习率 (lr) <span class="val" id="vLR">0.1</span></label>
+        <input type="range" id="pLR" min="-3" max="0" value="-1" step="0.1">
+        <div class="param-hint">实际值 = 10<sup>滑条值</sup>，范围 0.001 ~ 1.0。控制每步参数更新的步长。太大 → Loss 震荡甚至发散（跳过了最优点）。太小 → 收敛极慢甚至困在局部最优。SGD 通常 0.01~0.1，Adam 通常 0.0001~0.001。</div>
+      </div>
+      <div class="param-group">
+        <label>优化器</label>
+        <select id="pOpt">
+          <option value="sgd">SGD — 标准梯度下降</option>
+          <option value="adam">Adam — 自适应学习率</option>
+        </select>
+        <div class="param-hint">SGD：经典方法，学习率需要手动调好，简单直接。Adam：自动调整每个参数的学习率，对新手工匠友好、收敛更快更稳，但最终的泛化精度有时略逊于调好的 SGD。</div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin:14px 0 10px;">数据与复现</div>
+      <div class="param-group">
+        <label>数据集</label>
+        <select id="pDataset">
+          <option value="mnist">MNIST — 手写数字</option>
+          <option value="fashion_mnist">Fashion-MNIST — 服装图片</option>
+        </select>
+        <div class="param-hint">MNIST：经典手写数字识别，简单基线，适合验证模型基本功能。Fashion-MNIST：同尺寸（28×28 灰度）但内容为服装，难度略高，分类更依赖纹理而非简单形状，是替代 MNIST 的更好的现代基线。</div>
+      </div>
+      <div class="param-group">
+        <label>随机种子 <span class="val" id="vSeed">0</span></label>
+        <input type="range" id="pSeed" min="0" max="999" value="0" step="1">
+        <div class="param-hint">控制权重初始化和数据打乱的随机性。种子固定 → 多次运行结果完全可复现。种子不同 → 每次的初始化权重和数据顺序都不同，可用于评估随机性对结果的影响。</div>
+      </div>
+    </details>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:12px;font-weight:600;color:var(--text);">参数量</span>
+        <span class="val" id="paramCount" style="color:var(--accent);font-family:'SF Mono',monospace;font-size:14px;">26,506</span>
+      </div>
+      <!-- SVG network diagram -->
+      <div id="paramSvgContainer" style="margin:6px 0 4px;width:100%;"></div>
+      <!-- Formula + concrete example (HTML fallback, JS updates dynamically) -->
+      <div style="margin-top:4px;padding:6px 8px;background:var(--surface2);border-radius:6px;line-height:1.6;font-size:10px;">
+        <div style="margin-bottom:3px;"><b style="color:var(--text);">通用公式</b>：<span style="font-family:'SF Mono',monospace;color:var(--accent2);font-size:10px;">参数量 = 权重数 + 偏置数 = input_dim × output_dim + output_dim</span></div>
+        <div style="margin-bottom:2px;color:var(--text3);">以默认配置 <span style="color:var(--accent);font-weight:600;">784 → 32 → 32 → 10</span> 为例：</div>
+        <div id="detailedFormula" style="color:var(--accent2);font-family:'SF Mono',monospace;line-height:1.6;">
+          <span style="color:var(--text3);font-family:sans-serif;font-size:9px;">每层套用公式 input_dim×output_dim + output_dim：</span><br>
+          <span style="color:var(--text3);font-family:sans-serif;">第1层（784→32）</span>：<span style="color:var(--accent);">784×32</span> + <span style="color:var(--green);">32</span> = 25,088 + 32 = <span style="color:var(--text);">25,120</span><br>
+          <span style="color:var(--text3);font-family:sans-serif;">第2层（32→32）</span>：<span style="color:var(--accent);">32×32</span> + <span style="color:var(--green);">32</span> = 1,024 + 32 = <span style="color:var(--text);">1,056</span><br>
+          <span style="color:var(--text3);font-family:sans-serif;">第3层（32→10）</span>：<span style="color:var(--accent);">32×10</span> + <span style="color:var(--green);">10</span> = 320 + 10 = <span style="color:var(--text);">330</span><br>
+          <span style="border-top:1px solid var(--text3);display:block;margin:3px 0;"></span>
+          <span style="font-family:sans-serif;">✅ 总计</span>：<span style="color:var(--green);font-size:11px;">26,506</span>
+        </div>
+      </div>
+      <!-- Why bias -->
+      <details style="margin-top:4px;font-size:11px;color:var(--text3);cursor:pointer;">
+        <summary style="user-select:none;color:var(--accent);font-weight:600;">为什么需要偏置？</summary>
+        <div style="margin-top:4px;padding:6px 8px;background:var(--surface2);border-radius:6px;cursor:default;line-height:1.6;">
+          <b>先说直觉</b>：<br>
+          权重 W = 每个输入像素的重要性（黑不黑、是否在边缘上）<br>
+          偏置 b = 该神经元的「基础点亮门槛」<br><br>
+          <b>具体算给你看</b>：<br>
+          假装有一层 <span style="color:var(--accent)">Linear(2, 3)</span>（2 个输入 → 3 个输出），公式展开：<br>
+          <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);margin:4px 0 4px 8px;">
+            y₁ = x₁·w₁₁ + x₂·w₁₂ + <span style="color:var(--green)">b₁</span><br>
+            y₂ = x₁·w₂₁ + x₂·w₂₂ + <span style="color:var(--green)">b₂</span><br>
+            y₃ = x₁·w₃₁ + x₂·w₃₂ + <span style="color:var(--green)">b₃</span>
+          </div>
+          有 <span style="color:var(--accent)">3 个输出</span>（y₁, y₂, y₃），所以有 <span style="color:var(--green)">3 个偏置</span>（b₁, b₂, b₃）。<br>
+          回到 <span style="color:var(--accent)">Linear(784, 32)</span>：有 32 个输出 → 就有 32 个偏置。<br>
+          再回到 <span style="color:var(--accent)">总参数公式</span>：每层参数量 = <span style="color:var(--accent)">输入×输出</span> + <span style="color:var(--green)">输出</span> = <span style="color:var(--accent)">权重数</span> + <span style="color:var(--green)">偏置数</span>。
+        </div>
+      </details>
+    </div>
+
+    <!-- Dataset samples -->
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:var(--text2);">数据集样本</span>
+        <span style="font-size:10px;color:var(--text3);" id="sampleLabel">MNIST · 25 张</span>
+      </div>
+      <div class="samples-grid" id="samplesGrid"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnRun"><span class="spinner"></span><span class="btn-txt">开始训练</span></button>
+      <button class="btn btn-outline" id="btnClear">清空</button>
+    </div>
+
+    <!-- Runs list -->
+    <div class="run-list" id="runList"></div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div>
+    <!-- Chart -->
+    <div class="card" style="margin-bottom:20px;">
+      <h2>训练曲线</h2>
+      <div style="display:flex;gap:20px;font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">
+        <div style="flex:1;padding:6px 10px;background:var(--surface2);border-radius:6px;">
+          <b style="color:var(--red);">Loss 损失值</b> — 模型犯错程度。<span style="color:var(--text);">越低越好</span>，训练中应持续下降。<br>
+          <b style="color:var(--green);">Accuracy 准确率</b> — 猜对的百分比。<span style="color:var(--text);">越高越好</span>，理想 100%。
+        </div>
+        <div style="flex:1;padding:6px 10px;background:var(--surface2);border-radius:6px;">
+          运行标签说明：<span style="color:var(--text);font-family:'SF Mono',monospace;">H32-L2-lr0.1-sgd</span><br>
+          H32=隐藏层32  L2=隐藏层2层  lr0.1=学习率0.1  sgd=优化器
+        </div>
+      </div>
+      <div class="chart-legend-custom" id="chartLegend"></div>
+      <div class="chart-wrapper"><canvas id="chart"></canvas></div>
+      <div class="status-bar" id="statusBar"><span class="bar-dot"></span><span id="statusText">调整参数后点击「开始训练」</span></div>
+    </div>
+
+    <!-- Epoch workflow -->
+    <div class="card" style="margin-bottom:20px;">
+      <h2>每个 epoch 的工作流程</h2>
+      <div style="display:flex;align-items:center;gap:3px;margin-bottom:8px;flex-wrap:wrap;justify-content:center;">
+        <div style="background:var(--surface2);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid #3b82f644;flex-shrink:0;">
+          <div style="font-size:9px;color:var(--accent);font-weight:600;">①前向</div>
+          <div style="font-size:8px;color:var(--text3);">model(X)</div>
+        </div>
+        <span style="color:var(--text3);font-size:10px;">→</span>
+        <div style="background:var(--surface2);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid #f59e0b44;flex-shrink:0;">
+          <div style="font-size:9px;color:var(--amber);font-weight:600;">②反向</div>
+          <div style="font-size:8px;color:var(--text3);">梯度∇W</div>
+        </div>
+        <span style="color:var(--text3);font-size:10px;">→</span>
+        <div style="background:var(--surface2);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid #22c55e44;flex-shrink:0;">
+          <div style="font-size:9px;color:var(--green);font-weight:600;">③更新</div>
+          <div style="font-size:8px;color:var(--text3);">W−lr·∇W</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;background:var(--surface2);border-radius:6px;padding:3px 8px;border:1px dashed #475569;">
+          <span style="font-size:8px;color:var(--text3);">↻ 重复</span>
+          <span id="batchesPerEpoch" style="font-size:10px;color:var(--accent);font-weight:700;">235</span>
+          <span style="font-size:8px;color:var(--text3);">次</span>
+        </div>
+        <span style="color:var(--text3);font-size:10px;">➜</span>
+        <div style="background:var(--surface2);border-radius:6px;padding:6px 10px;text-align:center;border:1px solid #a855f744;flex-shrink:0;">
+          <div style="font-size:9px;color:#a855f7;font-weight:600;">④评估</div>
+          <div style="font-size:8px;color:var(--text3);">准确率</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);line-height:1.5;padding:6px 8px;background:var(--surface2);border-radius:6px;">
+        <b>训练循环</b>：①→②→③ 重复 <span style="color:var(--accent);font-weight:600;" id="batchesPerEpoch2">235</span> 次（每 batch <span style="color:var(--accent2);font-weight:600;" id="batchSizeLabel2">256</span> 张图），遍历完所有训练集后做 1 次④ → 完成<span style="color:var(--accent2);font-weight:600;">一个 epoch</span><br>
+        <b>前向</b>：像素值流经每层 Linear+ReLU，最后输出 10 个数字（每类一个得分）<br>
+        <b>反向</b>：自动求导算出每个参数对 Loss 的梯度（导数），即「往哪调能降低 Loss」<br>
+        <b>更新</b>：按梯度反方向微调参数。SGD 直接减，Adam 还自适应调整每一步的步长<br>
+        <b>评估</b>：只用前向传播（不更新参数），对比预测 vs 真实标签算正确率<br>
+        <b>epoch 间的关系</b>：后一个 epoch 沿用前一个训练好的参数继续微调，层层递进。所以 Loss 应逐轮下降、Accuracy 应逐轮上升。
+      </div>
+
+      <!-- Concrete numerical example -->
+      <details style="margin-top:8px;font-size:11px;color:var(--text3);cursor:pointer;">
+        <summary style="user-select:none;color:var(--accent2);font-weight:600;padding:4px 0;">具体算例 — 从输入到参数更新的完整计算</summary>
+        <div style="margin-top:6px;cursor:default;font-size:11px;line-height:1.7;">
+
+          <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:6px;">
+            <b style="color:var(--text);">用一个小网络</b> <span style="font-family:'SF Mono',monospace;color:var(--accent);font-size:10px;">Linear(2,3)</span> → ReLU → <span style="font-family:'SF Mono',monospace;color:var(--accent);font-size:10px;">Linear(3,2)</span> 走完全程，<b>每步都算出具体数值</b>。<br>
+            输入 x = [<span style="color:var(--accent2);">0.5</span>, <span style="color:var(--accent2);">0.8</span>]，目标类别 = <span style="color:var(--green);font-weight:600;">0</span>（one-hot t = [<span style="color:var(--green);">1</span>, 0]）
+          </div>
+
+          <!-- Setup: Weights -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--text);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">初始权重与偏置 — 模型在训练前的「出厂状态」</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                训练前权重 <b>W</b> 和偏置 <b>b</b> 由 MLX 随机初始化。这里用了一组小数值做演示。<br>
+                每个 <span style="color:var(--accent);">wⱼₖ</span> = 第 k 个输入对第 j 个神经元的影响强度。<span style="color:var(--green);">bⱼ</span> = 第 j 个神经元的「基础激活门槛」。<br>
+                第1层有 3×2+3 = 9 个参数，第2层有 2×3+2 = 8 个参数，共 17 个。
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--accent);">第1层 W¹（3×2）</b> — 2 个输入 → 3 个隐藏神经元
+                <div style="padding-left:12px;">
+                  w¹₁₁=0.1 &nbsp; w¹₁₂=0.2 &nbsp; <span style="color:var(--green);">b¹₁=0.01</span><br>
+                  w¹₂₁=0.3 &nbsp; w¹₂₂=0.4 &nbsp; <span style="color:var(--green);">b¹₂=0.02</span><br>
+                  w¹₃₁=0.5 &nbsp; w¹₃₂=0.6 &nbsp; <span style="color:var(--green);">b¹₃=0.03</span>
+                </div>
+                <b style="font-family:sans-serif;color:var(--accent);margin-top:4px;display:inline-block;">第2层 W²（2×3）</b> — 3 个隐藏神经元 → 2 个输出（类别 0 和 1）
+                <div style="padding-left:12px;">
+                  w²₁₁=0.7 &nbsp; w²₁₂=0.4 &nbsp; w²₁₃=0.9 &nbsp; <span style="color:var(--green);">b²₁=0.04</span><br>
+                  w²₂₁=0.2 &nbsp; w²₂₂=0.6 &nbsp; w²₂₃=0.3 &nbsp; <span style="color:var(--green);">b²₂=0.05</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Step 1: Forward -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">① 前向传播 — 输入数据流经网络，算出预测结果</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                <b>前向传播在干什么？</b>把输入 x（2 个像素值）送进网络，每层做一次「加权求和 + 偏置 + 激活函数」，最终输出 2 个得分（每个类别一个分）。<br>
+                公式 z = <b>W</b>·x + b：每个输出神经元 = 所有输入 × 对应权重的总和 + 偏置。
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--text);">z¹ = W¹·x + b¹</b> — 第1层线性变换<br>
+                <span style="padding-left:8px;">z¹₁ = <span style="color:var(--accent);">0.1</span>×<span style="color:var(--accent2);">0.5</span> + <span style="color:var(--accent);">0.2</span>×<span style="color:var(--accent2);">0.8</span> + <span style="color:var(--green);">0.01</span> = 0.05 + 0.16 + 0.01 = <span style="color:var(--accent2);">0.22</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ z¹₁ = 第1个隐藏神经元的原始得分，0.1×0.5 是第1个输入像素的贡献，0.2×0.8 是第2个输入像素的贡献，0.01 是偏置
+                </div>
+                <span style="padding-left:8px;">z¹₂ = <span style="color:var(--accent);">0.3</span>×<span style="color:var(--accent2);">0.5</span> + <span style="color:var(--accent);">0.4</span>×<span style="color:var(--accent2);">0.8</span> + <span style="color:var(--green);">0.02</span> = 0.15 + 0.32 + 0.02 = <span style="color:var(--accent2);">0.49</span></span><br>
+                <span style="padding-left:8px;">z¹₃ = <span style="color:var(--accent);">0.5</span>×<span style="color:var(--accent2);">0.5</span> + <span style="color:var(--accent);">0.6</span>×<span style="color:var(--accent2);">0.8</span> + <span style="color:var(--green);">0.03</span> = 0.25 + 0.48 + 0.03 = <span style="color:var(--accent2);">0.76</span></span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">a¹ = ReLU(z¹)</b> — 激活函数，砍掉负数<br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;">
+                  ReLU(x) = max(0, x)，把负数清零、正数保留。这里 z¹ 全部 &gt; 0，所以 a¹ = z¹。<br>
+                  如果 z¹ 中有负数，ReLU 会把它们变成 0，引入非线性，让多层网络不再等价于单层。
+                </div>
+                <span style="padding-left:8px;">a¹ = [<span style="color:var(--accent2);">0.22</span>, <span style="color:var(--accent2);">0.49</span>, <span style="color:var(--accent2);">0.76</span>]</span><br>
+                <span style="padding-left:8px;color:var(--text3);font-family:sans-serif;font-size:9px;">↑ 3 个隐藏神经元的激活值，传给第2层</span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">z² = W²·a¹ + b²</b> — 第2层线性变换<br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:2px;">
+                  第2层把 3 个隐藏特征映射到 2 个输出类别。z²₀ 是「属于类别 0」的得分，z²₁ 是「属于类别 1」的得分。
+                </div>
+                <span style="padding-left:8px;">z²₁ = <span style="color:var(--accent);">0.7</span>×<span style="color:var(--accent2);">0.22</span> + <span style="color:var(--accent);">0.4</span>×<span style="color:var(--accent2);">0.49</span> + <span style="color:var(--accent);">0.9</span>×<span style="color:var(--accent2);">0.76</span> + <span style="color:var(--green);">0.04</span></span><br>
+                <span style="padding-left:16px;">= 0.154 + 0.196 + 0.684 + 0.04 = <span style="color:var(--accent2);">1.074</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 0 的得分。三个隐藏神经元的贡献分别为 0.154、0.196、0.684。第3个隐藏神经元贡献最大（0.684），因为它激活值最高（0.76）且权重最大（0.9）。
+                </div>
+                <span style="padding-left:8px;">z²₂ = <span style="color:var(--accent);">0.2</span>×<span style="color:var(--accent2);">0.22</span> + <span style="color:var(--accent);">0.6</span>×<span style="color:var(--accent2);">0.49</span> + <span style="color:var(--accent);">0.3</span>×<span style="color:var(--accent2);">0.76</span> + <span style="color:var(--green);">0.05</span></span><br>
+                <span style="padding-left:16px;">= 0.044 + 0.294 + 0.228 + 0.05 = <span style="color:var(--accent2);">0.616</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 1 的得分，比类别 0 低（0.616 &lt; 1.074），目前模型认为更像类别 0。
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Step 1b: Loss -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--green);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">Loss 计算 — Softmax + Cross-Entropy，给预测结果「打分」</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                <b>为什么需要 Softmax？</b>原始得分 z² = [1.074, 0.616] 没有上限、未归一化。Softmax 把它们变成 <b>0~1 之间的概率</b>，总和为 1。<br>
+                公式 sⱼ = e^zⱼ / Σe^z：先指数化（让大得分更大、小得分更小），再除以总和做归一化。<br><br>
+                <b>Cross-Entropy Loss 衡量什么：</b>模型对正确答案给出的概率越低 → Loss 越高。最小化 Loss = 让模型对正确答案越来越自信。
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--text);">Softmax 归一化：</b><br>
+                <span style="padding-left:8px;">s₀ = e^1.074 / (e^1.074 + e^0.616) = 2.927 / (2.927 + 1.852) = <span style="color:var(--green);">0.612</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 0 的得分 1.074，指数化后 2.927，占总分 4.779 的 61.2%。这是模型认为「这是 0」的概率。
+                </div>
+                <span style="padding-left:8px;">s₁ = e^0.616 / 4.779 = 1.852 / 4.779 = <span style="color:var(--green);">0.388</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 1 的概率 38.8%。s₀+s₁=1。
+                </div>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">Cross-Entropy Loss：</b> L = −Σ tⱼ · log(sⱼ)<br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:2px;">
+                  真实标签 t = [1, 0]（one-hot），所以 L = −1×log(s₀) − 0×log(s₁) = −log(0.612)
+                </div>
+                <span style="padding-left:8px;">L = −log(0.612) = <span style="color:var(--red);font-weight:600;">0.491</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ Loss = 0.491。<b>怎么判断高低？</b>如果模型完全瞎猜（50% 对 50%），Loss = −log(0.5) = 0.693。<br>
+                  现在 Loss = 0.491 比 0.693 低，说明模型「有点感觉但还不够」——它认为 0 的概率是 61.2%，比 50% 好，但远不够 100%。
+                </div>
+                <div style="font-family:sans-serif;font-size:10px;color:var(--amber);margin-top:4px;padding:4px 6px;background:#332e0044;border-radius:4px;">
+                  💡 <b>Loss 的作用</b>：它是整个训练过程的「唯一裁判」。反向传播的所有梯度、参数更新的每一步，终极目标都是让这个数字变小。
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Step 2: Backward -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--amber);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">② 反向传播 — 从 Loss 出发，逐层算出每个参数的梯度</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                <b>反向传播要回答的问题：</b>每个参数（w 和 b）应该往哪个方向调、调多少，才能让 Loss 下降？<br>
+                答案就是计算 <b>梯度 ∇</b>：∂L/∂参数。梯度为正 → 参数增大使 Loss 增大 → 应该减小参数。梯度为负 → 参数增大使 Loss 减小 → 应该增大参数。<br>
+                计算顺序 <b>从后往前</b>：先算输出层，再用链式法则一层层传播到输入层。
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--text);">输出层梯度：</b> Softmax + Cross-Entropy 的联合导数恰好是 <span style="color:var(--amber);">∂L/∂z²ⱼ = sⱼ − tⱼ</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:3px;">
+                  📌 这个公式很漂亮：梯度 = 模型「猜的」(sⱼ) 减去「对的」(tⱼ)。<br>
+                  &nbsp;&nbsp;正确类（0）：猜了 0.612，应该是 1 → 梯度 = 0.612−1 = <b style="color:var(--amber);">−0.388</b> → 需要<b style="color:var(--green);">提高</b>这个类的得分<br>
+                  &nbsp;&nbsp;错误类（1）：猜了 0.388，应该是 0 → 梯度 = 0.388−0 = <b style="color:var(--amber);">+0.388</b> → 需要<b style="color:var(--red);">降低</b>这个类的得分
+                </div>
+                <span style="padding-left:8px;">∂L/∂z²₀ = 0.612 − 1 = <span style="color:var(--amber);">−0.388</span></span><br>
+                <span style="padding-left:8px;">∂L/∂z²₁ = 0.388 − 0 = <span style="color:var(--amber);">+0.388</span></span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">对 W² 的梯度：</b> ∂L/∂w²ⱼₖ = <span style="color:var(--amber);">∂L/∂z²ⱼ</span> × <span style="color:var(--accent2);">a¹ₖ</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:3px;">
+                  链式法则第1步：W² 直接连接输出层，所以 ∂L/∂W² = ∂L/∂z² × a¹（a¹ 是第1层的输出）。<br>
+                  每个 w²ⱼₖ 的梯度 = 「z²ⱼ 的梯度」×「a¹ₖ 的值」。
+                </div>
+                <div style="color:var(--amber);padding-left:8px;">
+                  ∂L/∂w²₁₁ = (−0.388) × 0.22 = −0.085 &nbsp;|&nbsp; ∂L/∂w²₂₁ = 0.388 × 0.22 = 0.085<br>
+                  ∂L/∂w²₁₂ = (−0.388) × 0.49 = −0.190 &nbsp;|&nbsp; ∂L/∂w²₂₂ = 0.388 × 0.49 = 0.190<br>
+                  ∂L/∂w²₁₃ = (−0.388) × 0.76 = −0.295 &nbsp;|&nbsp; ∂L/∂w²₂₃ = 0.388 × 0.76 = 0.295
+                </div>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 第3个隐藏神经元的权重梯度（±0.295）最大，因为它的激活值最大（0.76）——激活值越大的神经元，它的权重调整就越多。
+                </div>
+                <span style="padding-left:8px;">对 b² 的梯度：</span> <span style="color:var(--amber);">∂L/∂b²₀ = −0.388</span> &nbsp; <span style="color:var(--amber);">∂L/∂b²₁ = 0.388</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ b² 的梯度直接等于 ∂L/∂z²ⱼ（因为 ∂z²ⱼ/∂b²ⱼ = 1）。
+                </div>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">传播到隐藏层：</b> ∂L/∂a¹ₖ = Σ <span style="color:var(--amber);">∂L/∂z²ⱼ</span> × <span style="color:var(--accent);">w²ⱼₖ</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:3px;">
+                  链式法则第2步：a¹（隐藏层激活值）的梯度 = 所有输出层梯度 × 对应权重的总和。<br>
+                  每个隐藏神经元汇总了它影响到的所有输出神经元的梯度信息。
+                </div>
+                <div style="color:var(--amber);padding-left:8px;">
+                  ∂L/∂a¹₁ = (−0.388)×<span style="color:var(--accent);">0.7</span> + 0.388×<span style="color:var(--accent);">0.2</span> = −0.272 + 0.078 = <span style="color:var(--amber);">−0.194</span><br>
+                  ∂L/∂a¹₂ = (−0.388)×<span style="color:var(--accent);">0.4</span> + 0.388×<span style="color:var(--accent);">0.6</span> = −0.155 + 0.233 = <span style="color:var(--amber);">+0.078</span><br>
+                  ∂L/∂a¹₃ = (−0.388)×<span style="color:var(--accent);">0.9</span> + 0.388×<span style="color:var(--accent);">0.3</span> = −0.349 + 0.116 = <span style="color:var(--amber);">−0.233</span>
+                </div>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 第1个隐藏神经元接收来自两个输出神经元的信号：来自类别0的 −0.272（因为 w²₁₁=0.7 大了传过来），来自类别1的 +0.078（通过 w²₂₁=0.2）。<br>
+                  净效果 −0.194，意味着要「降低这个隐藏神经元的贡献来帮助降低 Loss」。
+                </div>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">通过 ReLU：</b> ∂L/∂z¹ⱼ = ∂L/∂a¹ⱼ × ReLU'(z¹ⱼ)<br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:3px;">
+                  ReLU 的导数很简单：输入&gt;0 时导数为 1，≤0 时为 0。这里 z¹ 全部 &gt; 0，所以梯度直接通过、数值不变。
+                </div>
+                <span style="padding-left:8px;color:var(--amber);">∂L/∂z¹ = [−0.194, 0.078, −0.233]</span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">对 W¹ 的梯度：</b> ∂L/∂w¹ⱼₖ = <span style="color:var(--amber);">∂L/∂z¹ⱼ</span> × <span style="color:var(--accent2);">xₖ</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:3px;">
+                  链式法则到了最底层：W¹ 直接连接输入 x，所以 ∂L/∂W¹ = ∂L/∂z¹ × x（x 是原始输入 [0.5, 0.8]）。
+                </div>
+                <div style="color:var(--amber);padding-left:8px;">
+                  ∂L/∂w¹₁₁ = (−0.194)×0.5 = −0.097 &nbsp;|&nbsp; ∂L/∂w¹₁₂ = (−0.194)×0.8 = −0.155<br>
+                  ∂L/∂w¹₂₁ = 0.078×0.5 = 0.039 &nbsp;&nbsp;&nbsp;|&nbsp; ∂L/∂w¹₂₂ = 0.078×0.8 = 0.062<br>
+                  ∂L/∂w¹₃₁ = (−0.233)×0.5 = −0.117 &nbsp;|&nbsp; ∂L/∂w¹₃₂ = (−0.233)×0.8 = −0.186
+                </div>
+                <span style="padding-left:8px;">对 b¹ 的梯度：</span> <span style="color:var(--amber);">∂L/∂b¹ = [−0.194, 0.078, −0.233]</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 至此，全部 17 个参数的梯度都算完了。每个 ∂L/∂w 告诉你：w 增加 1 个单位，Loss 会变化多少。
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Step 3: Update -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--green);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">③ 参数更新 — SGD，沿梯度反方向迈一小步</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                <b>更新规则：</b>W<sub>new</sub> = W − lr × ∇W<br>
+                梯度 ∇W 指向 Loss <b>升高</b>的方向 → 我们朝反方向走 → Loss 下降。<br>
+                <b>学习率 lr 控制步长：</b>lr=0.1 意味着每步最多移动梯度值的 10%。太小收敛慢，太大可能跳过最优点导致震荡。<br>
+                注意看梯度符号如何决定调整方向：
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--accent);">第1层 W¹_new：</b><br>
+                <div style="font-family:sans-serif;color:var(--text3);font-size:9px;padding-left:8px;margin-bottom:2px;">
+                  w¹₁₁：梯度 −0.097（负值）→ 需要增大 w → 0.1 − 0.1×(−0.097) = <b style="color:var(--green);">0.110 ↑</b>
+                </div>
+                <div style="padding-left:8px;">
+                  w¹₁₁: 0.1 − 0.1×(<span style="color:var(--amber);">−0.097</span>) = 0.1 + 0.010 = <span style="color:var(--green);">0.110</span><br>
+                  w¹₁₂: 0.2 − 0.1×(<span style="color:var(--amber);">−0.155</span>) = 0.2 + 0.016 = <span style="color:var(--green);">0.216</span><br>
+                  w¹₂₁: 0.3 − 0.1×(<span style="color:var(--amber);">0.039</span>) = 0.3 − 0.004 = <span style="color:var(--green);">0.296</span><br>
+                  w¹₂₂: 0.4 − 0.1×(<span style="color:var(--amber);">0.062</span>) = 0.4 − 0.006 = <span style="color:var(--green);">0.394</span><br>
+                  w¹₃₁: 0.5 − 0.1×(<span style="color:var(--amber);">−0.117</span>) = 0.5 + 0.012 = <span style="color:var(--green);">0.512</span><br>
+                  w¹₃₂: 0.6 − 0.1×(<span style="color:var(--amber);">−0.186</span>) = 0.6 + 0.019 = <span style="color:var(--green);">0.619</span>
+                </div>
+                <span style="padding-left:8px;">b¹_new = [0.01 − 0.1×(−0.194), 0.02 − 0.1×(0.078), 0.03 − 0.1×(−0.233)]</span><br>
+                <span style="padding-left:16px;">= [<span style="color:var(--green);">0.029</span>, <span style="color:var(--green);">0.012</span>, <span style="color:var(--green);">0.053</span>]</span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--accent);">第2层 W²_new：</b><br>
+                <div style="padding-left:8px;">
+                  w²₁₁: 0.7 − 0.1×(<span style="color:var(--amber);">−0.085</span>) = 0.7 + 0.009 = <span style="color:var(--green);">0.709</span><br>
+                  w²₁₂: 0.4 − 0.1×(<span style="color:var(--amber);">−0.190</span>) = 0.4 + 0.019 = <span style="color:var(--green);">0.419</span><br>
+                  w²₁₃: 0.9 − 0.1×(<span style="color:var(--amber);">−0.295</span>) = 0.9 + 0.030 = <span style="color:var(--green);">0.930</span><br>
+                  w²₂₁: 0.2 − 0.1×(<span style="color:var(--amber);">0.085</span>) = 0.2 − 0.009 = <span style="color:var(--green);">0.191</span><br>
+                  w²₂₂: 0.6 − 0.1×(<span style="color:var(--amber);">0.190</span>) = 0.6 − 0.019 = <span style="color:var(--green);">0.581</span><br>
+                  w²₂₃: 0.3 − 0.1×(<span style="color:var(--amber);">0.295</span>) = 0.3 − 0.030 = <span style="color:var(--green);">0.270</span>
+                </div>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 注意看 w²₁₁ 和 w²₂₁ 的变化：w²₁₁ 梯度 −0.085 → <b style="color:var(--green);">增大</b>（让类别 0 的得分更高）；w²₂₁ 梯度 +0.085 → <b style="color:var(--red);">减小</b>（让类别 1 的得分更低）。
+                </div>
+                <span style="padding-left:8px;">b²_new = [0.04 − 0.1×(−0.388), 0.05 − 0.1×(0.388)]</span><br>
+                <span style="padding-left:16px;">= [<span style="color:var(--green);">0.079</span>, <span style="color:var(--green);">0.011</span>]</span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ b²₀ 从 0.04 增大到 0.079（调高类别 0 的门槛让预测偏向 0），b²₁ 从 0.05 减小到 0.011（调低类别 1 的门槛让预测远离 1）。
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Verification -->
+          <details style="margin-bottom:4px;" open>
+            <summary style="color:var(--green);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">④ 验证 — 用新参数重跑前向，检验参数更新是否有效</summary>
+            <div style="margin-top:4px;padding:4px 8px;">
+              <div style="font-family:sans-serif;color:var(--text3);font-size:10px;line-height:1.5;margin-bottom:6px;">
+                <b>把更新后的 17 个参数代入网络，重跑一遍完整的前向传播。</b>如果反向传播算对了、学习率没设太大，新 Loss 应该比旧 Loss 小。
+              </div>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;line-height:1.6;">
+                <b style="font-family:sans-serif;color:var(--text);">用 W¹_new, b¹_new 重算第1层：</b><br>
+                <span style="padding-left:8px;">z¹₁ = <span style="color:var(--green);">0.110</span>×0.5 + <span style="color:var(--green);">0.216</span>×0.8 + <span style="color:var(--green);">0.029</span> = 0.055 + 0.173 + 0.029 = <span style="color:var(--accent2);">0.257</span></span><br>
+                <span style="padding-left:8px;">z¹₂ = <span style="color:var(--green);">0.296</span>×0.5 + <span style="color:var(--green);">0.394</span>×0.8 + <span style="color:var(--green);">0.012</span> = 0.148 + 0.315 + 0.012 = <span style="color:var(--accent2);">0.475</span></span><br>
+                <span style="padding-left:8px;">z¹₃ = <span style="color:var(--green);">0.512</span>×0.5 + <span style="color:var(--green);">0.619</span>×0.8 + <span style="color:var(--green);">0.053</span> = 0.256 + 0.495 + 0.053 = <span style="color:var(--accent2);">0.804</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 三个隐藏神经元的得分都有所提升（0.22→0.257, 0.49→0.475, 0.76→0.804），因为大部分权重和偏置都增大了。
+                </div>
+                <span style="padding-left:8px;">a¹_new = [0.257, 0.475, 0.804]</span><br>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">用 W²_new, b²_new 重算第2层：</b><br>
+                <span style="padding-left:8px;">z²₁ = <span style="color:var(--green);">0.709</span>×0.257 + <span style="color:var(--green);">0.419</span>×0.475 + <span style="color:var(--green);">0.930</span>×0.804 + <span style="color:var(--green);">0.079</span></span><br>
+                <span style="padding-left:16px;">= 0.182 + 0.199 + 0.748 + 0.079 = <span style="color:var(--accent2);">1.208</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 0 的得分从 1.074 <b style="color:var(--green);">提升到 1.208</b> ✅ 这正是我们想要的（所有相关权重都增大了）
+                </div>
+                <span style="padding-left:8px;">z²₂ = <span style="color:var(--green);">0.191</span>×0.257 + <span style="color:var(--green);">0.581</span>×0.475 + <span style="color:var(--green);">0.270</span>×0.804 + <span style="color:var(--green);">0.011</span></span><br>
+                <span style="padding-left:16px;">= 0.049 + 0.276 + 0.217 + 0.011 = <span style="color:var(--accent2);">0.553</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:16px;font-size:9px;">
+                  ↑ 类别 1 的得分从 0.616 <b style="color:var(--green);">降低到 0.553</b> ✅ 这正是我们想要的（相关权重都减小了）
+                </div>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">新 Softmax：</b><br>
+                <span style="padding-left:8px;">s₀_new = e^1.208 / (e^1.208 + e^0.553) = 3.347 / 5.086 = <span style="color:var(--green);">0.658</span></span><br>
+                <span style="padding-left:8px;">s₁_new = 1.739 / 5.086 = <span style="color:var(--green);">0.342</span></span><br>
+                <div style="font-family:sans-serif;color:var(--text3);padding-left:8px;font-size:9px;">
+                  ↑ 模型对「这是 0」的把握从 <b>61.2% 提升到了 65.8%</b>，对「这是 1」的怀疑从 38.8% 降到了 34.2%。
+                </div>
+                <br>
+                <b style="font-family:sans-serif;color:var(--text);">新 Loss：</b><br>
+                <span style="padding-left:8px;">L_new = −log(0.658) = <span style="color:var(--green);font-size:12px;font-weight:700;">0.418</span></span><br>
+                <br>
+                <div style="background:#1a3a2a;border-radius:6px;padding:6px 10px;text-align:center;font-size:11px;">
+                  <span style="color:var(--red);font-weight:600;">L_old = 0.491</span> &nbsp; → &nbsp; <span style="color:var(--green);font-weight:600;">L_new = 0.418</span> &nbsp; ✅ <span style="color:var(--green);font-weight:600;">Loss 下降了 15%！</span><br>
+                  <span style="font-family:sans-serif;color:var(--text3);">一次参数更新就有效果——这个 batch 的 2 张「图」让模型进步了一点点。</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Summary -->
+          <div style="padding:6px 8px;background:#1a2332;border:1px solid var(--border);border-radius:6px;font-size:10px;line-height:1.6;">
+            <b style="color:var(--text);">整件事串联起来看</b>：<br>
+            ① 输入 x 前向流过网络 → 算出得分 → Softmax 变概率 → Cross-Entropy 给 Loss<br>
+            ② 从 Loss 出发，链式法则逐层往回算梯度（MLX 的 <span style="font-family:'SF Mono',monospace;font-size:9px;">nn.value_and_grad</span> 自动完成）<br>
+            ③ 负梯度方向 × 学习率 → 更新所有参数<br>
+            ④ 用新参数重跑 → Loss 变低了 → 这个 batch 学完了 → 继续下一个 batch<br><br>
+            <span style="color:var(--text3);">实际代码中 MLX 自动完成所有梯度计算。理解这个流程的意义在于：当训练不收敛时，你能判断是学习率太大（Loss 震荡）、梯度消失（Loss 不动）、还是数据有问题（Loss 下不去）。</span>
+          </div>
+
+        </div>
+      </details>
+
+      <!-- Formulas -->
+      <details style="margin-top:8px;font-size:11px;color:var(--text3);cursor:pointer;">
+        <summary style="user-select:none;color:var(--accent);font-weight:600;padding:4px 0;">显示公式详解</summary>
+        <div style="margin-top:6px;cursor:default;">
+
+          <!-- 数据归一化 -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--text);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">数据预处理 — 归一化 Normalization</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">x_normalized = x_raw / 255.0</div>
+              MNIST 原始像素值是 0~255 的整数（0=全黑，255=全白），除以 255 归一化到 0.0~1.0。<br><br>
+              <b>为什么需要归一化？</b><br>
+              ① <b>数值稳定性</b>：不归一化的话，784 个 0~255 的值加权求和后可能达到上万级别，配合初始权重会让输出巨大，经过 softmax 后梯度极小（梯度饱和），模型几乎学不动。<br>
+              ② <b>公平特征尺度</b>：所有像素的取值范围统一在 [0,1]，每个输入对梯度的贡献量级一致。如果某个特征的取值范围天然比别的大很多，它会主导梯度方向。<br>
+              ③ <b>加速收敛</b>：归一化后的 Loss 曲面更接近「球形」，梯度下降路径更直接，不会在狭窄山谷中来回震荡。<br><br>
+              <b>其他归一化方法</b>：标准化 (x−μ)/σ 让数据均值为 0、方差为 1，同样常用。对于图像，除以 255 是最朴素的归一化，对 MNIST 已经足够。
+            </div>
+          </details>
+
+          <!-- 参数量计算 -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--accent2);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">参数量计算 — 26,506 的来源</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              默认设置 <span style="color:var(--accent);">hidden_dim=32, num_layers=2</span> 的 MLP：<br><br>
+              <b>模型结构</b>：<span style="color:var(--accent);">Linear(784,32)</span> → ReLU → <span style="color:var(--accent);">Linear(32,32)</span> → ReLU → <span style="color:var(--accent);">Linear(32,10)</span><br><br>
+              <b>每层参数量公式</b>：<span style="color:var(--text);font-family:'SF Mono',monospace;">权重数 + 偏置数 = input_dim × output_dim + output_dim</span><br><br>
+              <b>逐层计算</b>：<br>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);margin:3px 0 3px 8px;line-height:1.6;">
+                Layer 1（784→32）：<span style="color:var(--accent);">784×32</span> + <span style="color:var(--green);">32</span> = 25,088 + 32 = <span style="color:var(--text);">25,120</span><br>
+                Layer 2（32→32）：&nbsp;&nbsp;<span style="color:var(--accent);">32×32</span> + <span style="color:var(--green);">32</span> = 1,024 + 32 = <span style="color:var(--text);">1,056</span><br>
+                Layer 3（32→10）：&nbsp;&nbsp;<span style="color:var(--accent);">32×10</span> + <span style="color:var(--green);">10</span> = &nbsp;&nbsp;320 + 10 = <span style="color:var(--text);">330</span><br>
+                <span style="border-top:1px solid var(--text3);display:block;margin:4px 0;"></span>
+                <b>总计</b>：<span style="color:var(--accent);">25,120 + 1,056 + 330</span> = <span style="color:var(--green);font-size:12px;">26,506</span>
+              </div>
+              <b>权重 W</b>（蓝色部分）：每层所有输入到所有输出的连接数 = input_dim × output_dim。把 784 个像素映射到 32 个特征需要 784×32 个连接强度。<br>
+              <b>偏置 b</b>（绿色部分）：每个输出神经元各一个，共 output_dim 个。<br><br>
+              <b>调参时参数量变化</b>（举个例子）：<br>
+              &nbsp;&nbsp;• hidden_dim=32 → 64：26,506 → 59,210（翻倍以上，因为中间层 32→64 后三层都变大了）<br>
+              &nbsp;&nbsp;• num_layers=2 → 3：26,506 → 101,962（多一层 64→64 需要 4,160 个额外参数）
+            </div>
+          </details>
+
+          <!-- 梯度概念 -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--amber);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">梯度 Gradient — 概念详解</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <b>1. 梯度是什么</b><br>
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">∇L(W) = [ ∂L/∂w₁,  ∂L/∂w₂,  ...,  ∂L/∂wₙ ]</div>
+              梯度是一个向量，每个分量是 Loss 对某个参数 wᵢ 的<span style="color:var(--text);">偏导数</span>。<br>
+              偏导数 ∂L/∂wᵢ 的含义：如果 wᵢ 增加一丁点，Loss 会变化多少。<br>
+              整个梯度向量 ∇L 的方向 = <span style="color:var(--text);">Loss 上升最快的方向</span>。<br><br>
+
+              <b>2. 为什么朝反方向走</b><br>
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">W_new = W − lr · ∇L</div>
+              梯度指向 Loss <b>增加</b>最快的方向 → 我们朝反方向（负梯度）走 → Loss 下降。<br>
+              这就是「梯度<b>下降</b>」这个名字的由来。<br><br>
+
+              <b>3. 一个参数版 — 下山类比</b><br>
+              假设模型只有一个参数 w，Loss 曲线 L(w) 像一座山：<br>
+              &nbsp;&nbsp;• ∂L/∂w &gt; 0（斜率为正）→ w 在右坡上 → 往左走（减小 w）才能下山<br>
+              &nbsp;&nbsp;• ∂L/∂w &lt; 0（斜率为负）→ w 在左坡上 → 往右走（增大 w）才能下山<br>
+              无论哪种情况，<span style="color:var(--accent);">w = w − lr · ∂L/∂w</span> 都正确地把 w 推向山谷。<br>
+              用 26506 个参数替代一个 w —— 就得到完整的模型更新。<br><br>
+
+              <b>4. MLX 如何自动计算梯度</b><br>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);margin:3px 0 3px 8px;">
+                loss_and_grad_fn = nn.value_and_grad(model, loss_fn)<br>
+                loss, grads = loss_and_grad_fn(model, X, y)
+              </div>
+              调用 <span style="color:var(--text);">nn.value_and_grad</span> 后，MLX 框架内部自动构建计算图：<br>
+              &nbsp;&nbsp;① 记录前向传播中每步操作的顺序<br>
+              &nbsp;&nbsp;② 从 Loss 出发，沿计算图反向遍历每一步<br>
+              &nbsp;&nbsp;③ 每步用链式法则乘上局部导数<br>
+              &nbsp;&nbsp;④ 最终每个参数得到对应的梯度值<br>
+              你不需要手动推导任何一个导数公式 —— 框架全自动完成。
+            </div>
+          </details>
+
+          <!-- 前向-Linear -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">① 前向传播 — Linear 层公式</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">y = W·x + b</div>
+              展开写，以 <span style="color:var(--accent);">Linear(784, 32)</span> 为例：<br>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);margin:3px 0 3px 8px;">
+                y₁ = x₁·w₁₁ + x₂·w₁₂ + ... + x₇₈₄·w₁_₇₈₄ + b₁<br>
+                y₂ = x₁·w₂₁ + x₂·w₂₂ + ... + x₇₈₄·w₂_₇₈₄ + b₂<br>
+                ⋮<br>
+                y₃₂ = x₁·w₃₂₁ + x₂·w₃₂₂ + ... + x₇₈₄·w₃₂_₇₈₄ + b₃₂
+              </div>
+              <b>W</b>：权重矩阵（784×32），每个元素 wⱼₖ 表示第 k 个输入像素对第 j 个输出神经元的影响强度<br>
+              <b>x</b>：输入向量（784 个灰度值，归一化到 0~1）<br>
+              <b>b</b>：偏置向量（32 个值），每个输出神经元一个，控制其激活门槛<br>
+              <b>y</b>：输出向量（32 个值），每个值 = 784 个输入的加权和 + 偏置<br>
+              作用：把 784 个像素信息压缩成 32 个「高层特征」。
+            </div>
+          </details>
+
+          <!-- ReLU -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--amber);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">ReLU 激活函数</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">ReLU(x) = max(0, x)</div>
+              作用在每层 Linear 之后（输出层之前）：<br>
+              <div style="text-align:center;font-family:'SF Mono',monospace;font-size:11px;color:var(--accent2);margin:3px 0;">
+                h = ReLU(<span style="color:var(--accent);">W·x + b</span>)
+              </div>
+              <b>具体行为</b>：把线性层输出的负数全部变成 0，正数保持不变<br>
+              <b>为什么要用</b>：如果没有 ReLU，多个 Linear 层叠在一起等价于一个 Linear（因为线性变换的复合还是线性）。ReLU 砍掉负数 = 引入<span style="color:var(--text);">非线性</span>，让深层网络真正有意义。<br>
+              <b>例子</b>：输出 [-5, 1.2, 0, -0.3, 4] → ReLU → [0, 1.2, 0, 0, 4]<br>
+              它的导数也很简单：x&gt;0 时导数为 1，x≤0 时导数为 0。反向传播计算极快。
+            </div>
+          </details>
+
+          <!-- Loss -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--green);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">损失函数 — Cross Entropy</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">L = −Σ tᵢ · log(yᵢ)</div>
+              其中 tᵢ 是真实标签（one-hot，正确类=1，其他=0），yᵢ 是模型预测的概率（softmax 归一化后）<br><br>
+              <b>简化理解</b>：因为 tᵢ 只有一个 1（真实类别），公式简化为：<br>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);text-align:center;margin:3px 0;">
+                L = −log(模型对正确答案给出的概率)
+              </div>
+              <b>例子</b>：真实数字是 7，模型预测概率分布为 [0.01, 0.01, 0.02, 0.02, 0.01, 0.03, 0.01, <span style="color:var(--green);">0.85</span>, 0.02, 0.02]<br>
+              L = −log(0.85) = 0.16（低 → 预测好）<br>
+              如果模型对 7 只给出 0.1 的概率：L = −log(0.1) = 2.30（高 → 预测差）<br>
+              <b>作用</b>：Loss 是整个训练过程的<span style="color:var(--text);">唯一评判标准</span>。反向传播的目标就是让 Loss 越来越小。
+            </div>
+          </details>
+
+          <!-- 反向传播 -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--amber);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">② 反向传播 — 链式法则</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">∂L/∂W = (∂L/∂y) · (∂y/∂W)</div>
+              链式法则：复合函数的导数 = 外层导数 × 内层导数，一层层往回传<br><br>
+              <b>用两层的例子说明信号流</b>：<br>
+              <div style="font-family:'SF Mono',monospace;font-size:10px;color:var(--accent2);margin:3px 0 3px 8px;line-height:1.5;">
+                x → <span style="color:var(--accent);">Linear(W₁, b₁)</span> → ReLU → <span style="color:var(--accent);">Linear(W₂, b₂)</span> → CrossEntropy(Loss)<br>
+                <br>
+                <span style="color:var(--amber);">反向传播信号流向：</span><br>
+                ∂L/∂W₂ = ∂L/∂y₂ · ∂y₂/∂W₂  ← 先算输出层的梯度<br>
+                ∂L/∂h  = ∂L/∂y₂ · ∂y₂/∂h   ← 中间变量的梯度<br>
+                ∂L/∂W₁ = ∂L/∂h · ∂h/∂W₁   ← 再用中间梯度算第一层的梯度
+              </div>
+              <b>直观理解</b>：前向是「数据流 →」，反向是「梯度流 ←」。<br>
+              每一层收到来自上一层的梯度后，乘上自己对 W 的局部导数，得到 W 的最终梯度。<br>
+              这个梯度 ∇W 告诉模型：「W 往正方向调一点，Loss 变大/变小多少？」<br>
+              然后更新步骤就朝反方向走：让 Loss 变小的方向。
+            </div>
+          </details>
+
+          <!-- 参数更新 -->
+          <details style="margin-bottom:4px;">
+            <summary style="color:var(--green);font-size:11px;font-weight:600;cursor:pointer;user-select:none;">③ 参数更新 — SGD / Adam</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <b style="color:var(--accent);">SGD（随机梯度下降）</b><br>
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">W = W − lr · ∂L/∂W</div>
+              从当前 W 出发，沿着梯度的反方向（使 Loss 下降的方向）迈一小步。<br>
+              lr（学习率）控制步长：太大一步跨过头（震荡/发散），太小走太慢。<br>
+              每个 batch 的梯度是基于当前这 256 张图算的，不是全量 60000 张 → 有噪声（所以叫「随机」），但噪声反而有正则化效果。<br><br>
+              <b style="color:var(--accent);">Adam（自适应矩估计）</b><br>
+              <div style="font-family:'SF Mono',monospace;font-size:11px;color:var(--accent2);text-align:center;padding:4px 0;">
+                m = β₁·m + (1−β₁)·∇W<br>
+                v = β₂·v + (1−β₂)·(∇W)²<br>
+                W = W − lr · m / (√v + ε)
+              </div>
+              <b>m</b>：梯度的一阶矩（动量），记录梯度之前的方向，平滑震荡<br>
+              <b>v</b>：梯度的二阶矩（自适应学习率），频繁更新的参数步长自动变小，稀疏更新的参数步长自动变大<br>
+              <b>对比</b>：SGD 对所有参数用同一个 lr，Adam 给每个参数自动调整步长。Adam 对新手工匠更友好。
+            </div>
+          </details>
+
+          <!-- 评估 -->
+          <details>
+            <summary style="color:#a855f7;font-size:11px;font-weight:600;cursor:pointer;user-select:none;">④ 评估 — Accuracy</summary>
+            <div style="padding:6px 8px;background:var(--surface2);border-radius:6px;margin-top:4px;line-height:1.7;font-size:11px;">
+              <div style="font-family:'SF Mono',monospace;font-size:13px;color:var(--accent2);text-align:center;padding:4px 0;">Accuracy = 预测正确的样本数 ÷ 总样本数</div>
+              对测试集 10000 张图，每张：<br>
+              &nbsp;&nbsp;① 前向传播得到 10 个类别得分<br>
+              &nbsp;&nbsp;② 取得分最高的类别作为预测结果<br>
+              &nbsp;&nbsp;③ 对比预测 vs 真实标签<br>
+              <b>关键区别</b>：评估阶段 <span style="color:var(--red);font-weight:600;">不计算梯度、不更新参数</span>，只做前向传播。<br>
+              Accuracy 反映模型在「从未见过的数据」上的泛化能力。<br>
+              它和 Loss 是互补指标：Loss 衡量单个样本的犯错程度，Accuracy 衡量整体的正确率。
+            </div>
+          </details>
+
+        </div>
+      </details>
+    </div>
+
+    <!-- Log + Predictions -->
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;">
+      <div class="card">
+        <h2>训练日志</h2>
+        <div class="log-box" id="logBox">
+          <div class="log-entry info">就绪</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>预测结果 <span class="badge" id="predBadge">—</span></h2>
+        <div id="predArea">
+          <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center;">训练完成后将显示各次运行的预测对比</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ Run state ═══
+let runs = [];          // { id, label, color, losses[], accs[], predictions[], params }
+let runCounter = 0;
+const RUN_COLORS = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316'];
+
+const RUN_COLORS_DASHED = RUN_COLORS.map(c => c + '88');
+
+// ═══ Utils ═══
+function drawImage(canvas, data28x28) {
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(28, 28);
+  const flat = Array.isArray(data28x28[0]) ? data28x28.flat() : data28x28;
+  for (let i = 0; i < 784; i++) {
+    const v = Math.round(flat[i] * 255);
+    const p = i * 4;
+    imgData.data[p] = v; imgData.data[p+1] = v; imgData.data[p+2] = v; imgData.data[p+3] = 255;
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function log(msg, type = '') {
+  const box = document.getElementById('logBox');
+  const d = document.createElement('div');
+  d.className = 'log-entry' + (type ? ' ' + type : '');
+  d.textContent = msg;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function paramLabel(params) {
+  return `H${params.hidden_dim}-L${params.num_layers}-lr${params.learning_rate}-${params.optimizer}`;
+}
+
+// ═══ SVG param viz ═══
+function renderParamSVG(layerSizes) {
+  const svgW = 304;
+  const boxH = 28;
+  const topY = 28;
+  const n = layerSizes.length;
+  const boxW = Math.min(48, Math.max(36, (svgW - 30) / n - 10));
+  const gap = Math.max(4, Math.min(16, (svgW - n * boxW - 20) / (n - 1)));
+  const totalW = n * boxW + (n - 1) * gap;
+  const startX = (svgW - totalW) / 2;
+
+  const wx = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    wx[i] = startX + i * (boxW + gap) + boxW;
+  }
+
+  const COLORS = ['#3b82f6','#8b5cf6','#06b6d4','#f59e0b','#ec4899','#14b8a6','#f97316','#a855f7'];
+
+  let svg = `<svg width="${svgW}" height="100" viewBox="0 0 ${svgW} 100" xmlns="http://www.w3.org/2000/svg" style="display:block;">`;
+
+  // Arrows with labels
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = wx[i];
+    const y1 = topY + boxH / 2;
+    const x2 = x1 + gap;
+    const c = COLORS[i % COLORS.length];
+    const wVal = layerSizes[i] * layerSizes[i+1];
+    const bVal = layerSizes[i+1];
+
+    // Arrow line
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y1}" stroke="${c}" stroke-width="1.5" marker-end="url(#a${i})"/>`;
+    svg += `<defs><marker id="a${i}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L6,3 L0,6" fill="${c}"/></marker></defs>`;
+
+    // Weight label above arrow
+    svg += `<text x="${(x1+x2)/2}" y="${y1-4}" text-anchor="middle" fill="${c}" font-size="7" font-family="monospace">W: ${layerSizes[i]}×${layerSizes[i+1]}</text>`;
+    // Bias label below arrow
+    svg += `<text x="${(x1+x2)/2}" y="${y1+12}" text-anchor="middle" fill="#22c55e" font-size="7" font-family="monospace">b: ${bVal}</text>`;
+  }
+
+  // Layer boxes
+  for (let i = 0; i < n; i++) {
+    const x = startX + i * (boxW + gap);
+    const fill = i === 0 ? '#1e3a5f' : (i === n - 1 ? '#3b1f3f' : '#1a2f3a');
+    const stroke = i === 0 ? '#3b82f6' : (i === n - 1 ? '#ec4899' : '#475569');
+
+    svg += `<rect x="${x}" y="${topY}" width="${boxW}" height="${boxH}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
+
+    // Layer name
+    let name;
+    if (i === 0) name = '输入';
+    else if (i === n - 1) name = '输出';
+    else name = `H${i}`;
+
+    svg += `<text x="${x + boxW/2}" y="${topY + boxH/2 + 1}" text-anchor="middle" fill="#e2e8f0" font-size="8" font-weight="600">${name}</text>`;
+
+    // Dimension below
+    svg += `<text x="${x + boxW/2}" y="${topY + boxH + 12}" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">${layerSizes[i]}</text>`;
+  }
+
+  // Param count badge
+  const total = layerSizes.slice(0, -1).reduce((sum, s, i) => sum + s * layerSizes[i+1] + layerSizes[i+1], 0);
+  svg += `<rect x="${svgW/2-42}" y="1" width="84" height="14" rx="7" fill="#3b82f622" stroke="#3b82f6" stroke-width=".6"/>`;
+  svg += `<text x="${svgW/2}" y="11" text-anchor="middle" fill="#3b82f6" font-size="8" font-family="monospace" font-weight="600">Θ = ${total.toLocaleString()}</text>`;
+
+  svg += `</svg>`;
+
+  document.getElementById('paramSvgContainer').innerHTML = svg;
+}
+function getParams(overrides = {}) {
+  const lr = Math.pow(10, parseFloat(document.getElementById('pLR').value));
+  return {
+    hidden_dim: parseInt(document.getElementById('pHidden').value),
+    num_layers: parseInt(document.getElementById('pLayers').value),
+    num_epochs: parseInt(document.getElementById('pEpochs').value),
+    batch_size: parseInt(document.getElementById('pBatch').value),
+    learning_rate: parseFloat(lr.toFixed(4)),
+    optimizer: document.getElementById('pOpt').value,
+    dataset: document.getElementById('pDataset').value,
+    seed: parseInt(document.getElementById('pSeed').value),
+    ...overrides,
+  };
+}
+
+function updateParamDisplay() {
+  const p = getParams();
+  document.getElementById('vHidden').textContent = p.hidden_dim;
+  document.getElementById('vLayers').textContent = p.num_layers;
+  document.getElementById('vEpochs').textContent = p.num_epochs;
+  document.getElementById('vBatch').textContent = p.batch_size;
+  document.getElementById('vLR').textContent = p.learning_rate;
+  document.getElementById('vSeed').textContent = p.seed;
+  document.getElementById('batchSizeLabel2').textContent = p.batch_size;
+  fetch(`/api/dataset-info?dataset=${p.dataset}`).then(r => r.json()).then(d => {
+    const n = Math.ceil(d.train_size / p.batch_size);
+    document.getElementById('batchesPerEpoch').textContent = n;
+    document.getElementById('batchesPerEpoch2').textContent = n;
+  });
+  // fetch param info
+  fetch(`/api/param-info?hidden_dim=${p.hidden_dim}&num_layers=${p.num_layers}`)
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('paramCount').textContent = d.total_params.toLocaleString();
+      const sz = d.layer_sizes;
+      const nHidden = sz.length - 2;
+      let html = '<div style="color:var(--text3);font-family:sans-serif;font-size:9px;margin-bottom:2px;">每层套用公式 input_dim×output_dim + output_dim：</div>';
+      let total = 0;
+      for (let i = 0; i < sz.length - 1; i++) {
+        const w = sz[i] * sz[i+1];
+        const b = sz[i+1];
+        total += w + b;
+        let label;
+        if (i === 0) label = `第1层（${sz[i]}→${sz[i+1]}）`;
+        else if (i === sz.length - 2) label = `第${sz.length-1}层（${sz[i]}→${sz[i+1]}）`;
+        else label = `第${i+1}层（${sz[i]}→${sz[i+1]}）`;
+        // formula text + numeric calculation
+        html += `<span style="color:var(--text3);font-family:sans-serif;">${label}</span>：<span style="color:var(--accent);">${sz[i]}×${sz[i+1]}</span> + <span style="color:var(--green);">${sz[i+1]}</span> = ${(w).toLocaleString()} + ${b} = <span style="color:var(--text);">${(w+b).toLocaleString()}</span><br>`;
+      }
+      html += `<span style="border-top:1px solid var(--text3);display:block;margin:3px 0;"></span>`;
+      html += `<span style="font-family:sans-serif;">✅ 总计</span>：<span style="color:var(--green);font-size:11px;">${total.toLocaleString()}</span>`;
+      document.getElementById('detailedFormula').innerHTML = html;
+      renderParamSVG(d.layer_sizes);
+    });
+}
+
+document.querySelectorAll('#pHidden,#pLayers,#pEpochs,#pBatch,#pLR,#pSeed').forEach(el => {
+  el.addEventListener('input', updateParamDisplay);
+});
+updateParamDisplay();
+
+// ═══ Dataset samples ═══
+function loadSamples(dataset) {
+  fetch(`/api/samples?dataset=${dataset}`)
+    .then(r => r.json())
+    .then(samples => {
+      const grid = document.getElementById('samplesGrid');
+      grid.innerHTML = samples.map(s => `
+        <div class="cell"><canvas width="28" height="28"></canvas><span class="lbl">${s.label}</span></div>
+      `).join('');
+      grid.querySelectorAll('.cell').forEach((cell, i) => {
+        drawImage(cell.querySelector('canvas'), samples[i].image);
+      });
+      const names = { mnist: 'MNIST · 手写数字', fashion_mnist: 'Fashion-MNIST · 服装' };
+      document.getElementById('sampleLabel').textContent = names[dataset] || dataset + ' · 25 张';
+    });
+}
+loadSamples('mnist');
+
+document.getElementById('pDataset').addEventListener('change', () => {
+  loadSamples(document.getElementById('pDataset').value);
+});
+
+// ═══ Chart ═══
+const chartCtx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(chartCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 200 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4),
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(71,85,105,.2)' } },
+      y: { type: 'linear', display: true, position: 'left', min: 0, max: 2.5,
+           ticks: { color: '#ef4444', font: { size: 10 } },
+           grid: { color: 'rgba(71,85,105,.2)' },
+           title: { display: true, text: 'Loss', color: '#ef4444', font: { size: 11 } } },
+      y1: { type: 'linear', display: true, position: 'right', min: 0, max: 1,
+            ticks: { color: '#22c55e', font: { size: 10 } },
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: 'Accuracy', color: '#22c55e', font: { size: 11 } } },
+    }
+  }
+});
+
+function rebuildChart() {
+  const maxEpochs = Math.max(1, ...runs.map(r => r.losses.length));
+  const labels = Array.from({length: maxEpochs}, (_, i) => `E${i+1}`);
+
+  chart.data.labels = labels;
+  chart.data.datasets = [];
+
+  runs.forEach((run, ri) => {
+    const color = RUN_COLORS[ri % RUN_COLORS.length];
+    // Loss
+    chart.data.datasets.push({
+      label: `${run.label} (Loss)`,
+      data: run.losses,
+      borderColor: color,
+      backgroundColor: color + '15',
+      fill: true, tension: 0.3,
+      pointRadius: run.losses.length <= 10 ? 3 : 2,
+      yAxisID: 'y',
+      borderWidth: 2,
+      hidden: run._hidden || false,
+    });
+    // Accuracy
+    chart.data.datasets.push({
+      label: `${run.label} (Acc)`,
+      data: run.accs,
+      borderColor: color,
+      borderDash: [5, 4],
+      backgroundColor: 'transparent',
+      fill: false, tension: 0.3,
+      pointRadius: 4,
+      pointStyle: 'rectRot',
+      yAxisID: 'y1',
+      borderWidth: 2,
+      hidden: run._hidden || false,
+    });
+  });
+
+  chart.update();
+  renderLegend();
+}
+
+function renderLegend() {
+  const el = document.getElementById('chartLegend');
+  el.innerHTML = runs.map((run, ri) => {
+    const color = RUN_COLORS[ri % RUN_COLORS.length];
+    const lastAcc = run.accs.length > 0 ? (run.accs[run.accs.length-1] * 100).toFixed(1) : '—';
+    return `<span class="leg-item" data-ri="${ri}" style="${run._hidden ? 'opacity:.35' : ''}">
+      <span class="leg-swatch" style="background:${color}"></span>
+      <span class="leg-swatch dashed" style="border-top-color:${color};margin-left:-8px"></span>
+      ${run.label} <span style="color:var(--text3);font-size:11px;">(${lastAcc}%)</span>
+    </span>`;
+  }).join('');
+  el.querySelectorAll('.leg-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const ri = parseInt(el.dataset.ri);
+      const run = runs[ri];
+      if (!run) return;
+      run._hidden = !run._hidden;
+      rebuildChart();
+      renderRunList();
+    });
+  });
+}
+
+// ═══ Run list ═══
+function renderRunList() {
+  const el = document.getElementById('runList');
+  el.innerHTML = runs.map((run, ri) => {
+    const color = RUN_COLORS[ri % RUN_COLORS.length];
+    const lastAcc = run.accs.length > 0 ? (run.accs[run.accs.length-1] * 100).toFixed(1) : '—';
+    return `<div class="run-item" style="${run._hidden ? 'opacity:.5' : ''}">
+      <span class="dot" style="background:${color}"></span>
+      <span class="label">${run.label}</span>
+      <span class="acc">${lastAcc}%</span>
+      <span class="rm" onclick="removeRun(${ri})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function removeRun(ri) {
+  runs.splice(ri, 1);
+  rebuildChart();
+  renderRunList();
+  renderPredictions();
+}
+
+// ═══ Predictions ═══
+function renderPredictions() {
+  const area = document.getElementById('predArea');
+  const visible = runs.filter(r => !r._hidden && r.predictions && r.predictions.length > 0);
+  const total = runs.filter(r => r.predictions && r.predictions.length > 0).length;
+  document.getElementById('predBadge').textContent = total > 0 ? `${total} 次运行` : '—';
+
+  if (visible.length === 0) {
+    const hasData = runs.some(r => r.predictions && r.predictions.length > 0);
+    area.innerHTML = hasData
+      ? '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center;">某些运行被隐藏，取消隐藏后查看预测</div>'
+      : '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center;">训练完成后将显示各次运行的预测对比</div>';
+    return;
+  }
+
+  area.innerHTML = visible.map((run, vi) => {
+    const ri = runs.indexOf(run);
+    const color = RUN_COLORS[ri % RUN_COLORS.length];
+    const correct = run.predictions.filter(p => p.true_label === p.predicted).length;
+    return `<div class="pred-row">
+      <div class="pred-title"><span class="dot" style="background:${color}"></span>${run.label} — <span style="color:var(--green)">${correct}/${run.predictions.length}</span> 正确</div>
+      <div class="pred-grid">
+        ${run.predictions.map(p => `
+          <div class="cell ${p.true_label === p.predicted ? 'correct' : 'wrong'}">
+            <canvas width="28" height="28"></canvas>
+            <span class="lbl">${p.predicted}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  area.querySelectorAll('.pred-row').forEach((row, vi) => {
+    const run = visible[vi];
+    row.querySelectorAll('.cell').forEach((cell, ci) => {
+      drawImage(cell.querySelector('canvas'), run.predictions[ci].image);
+    });
+  });
+}
+
+// ═══ Training ═══
+const btnRun = document.getElementById('btnRun');
+const btnClear = document.getElementById('btnClear');
+const statusText = document.getElementById('statusText');
+const statusDot = document.querySelector('.status-bar .bar-dot');
+
+btnRun.addEventListener('click', startTraining);
+btnClear.addEventListener('click', () => {
+  runs = [];
+  rebuildChart();
+  renderRunList();
+  renderPredictions();
+  log('已清空所有运行记录', 'info');
+  statusText.textContent = '就绪';
+  statusDot.className = 'bar-dot';
+});
+
+function startTraining() {
+  if (btnRun.classList.contains('training')) return;
+
+  const params = getParams({ run_id: `run_${runCounter}` });
+  const label = paramLabel(params);
+  const colorIdx = runCounter % RUN_COLORS.length;
+  const runId = runCounter++;
+
+  const run = { id: runId, label, color: RUN_COLORS[colorIdx], losses: [], accs: [], predictions: [], params, _hidden: false };
+  runs.push(run);
+  renderRunList();
+
+  btnRun.classList.add('training');
+  btnRun.disabled = true;
+  statusText.textContent = `运行 ${label} — 初始化...`;
+  statusDot.className = 'bar-dot active';
+  log(`▶ 开始: ${label}`, 'run-start');
+  log(`  参数: hidden_dim=${params.hidden_dim} layers=${params.num_layers} lr=${params.learning_rate} opt=${params.optimizer} batch=${params.batch_size} epochs=${params.num_epochs}`,'info');
+
+  const es = new EventSource(`/api/train/sse?${new URLSearchParams(params)}`);
+  es.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    switch (data.type) {
+      case 'start':
+        statusText.textContent = `${label} — 训练中 (${data.total_batches} batches/epoch)`;
+        break;
+      case 'batch':
+        break;
+      case 'epoch': {
+        const ep = data.epoch + 1;
+        run.losses.push(data.avg_loss);
+        run.accs.push(data.accuracy);
+        rebuildChart();
+        statusText.textContent = `${label} — Epoch ${ep}/${params.num_epochs} Loss:${data.avg_loss} Acc:${(data.accuracy*100).toFixed(1)}%`;
+        log(`  Epoch ${ep}: loss=${data.avg_loss} acc=${(data.accuracy*100).toFixed(0)}% (${data.time}s)`, 'epoch');
+        break;
+      }
+      case 'done': {
+        es.close();
+        run.predictions = data.predictions;
+        btnRun.classList.remove('training');
+        btnRun.disabled = false;
+        const finalAcc = run.accs.length > 0 ? (run.accs[run.accs.length-1] * 100).toFixed(1) : '?';
+        statusText.textContent = `✓ ${label} 完成 — 准确率 ${finalAcc}%`;
+        statusDot.className = 'bar-dot';
+        log(`✓ 完成: ${label} — 准确率 ${finalAcc}%`, 'done');
+        renderPredictions();
+        break;
+      }
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    btnRun.classList.remove('training');
+    btnRun.disabled = false;
+    statusText.textContent = '连接中断，请重试';
+    statusDot.className = 'bar-dot';
+    log('SSE 连接错误', 'info');
+  };
+}
+</script>
+</body>
+</html>

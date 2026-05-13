@@ -1,0 +1,3 @@
+mlx>=0.2
+numpy
+flask>=3.0
